@@ -55,6 +55,8 @@
 
 #include "libfdt_internal.h"
 
+#include <string.h>
+
 static int _fdt_blocks_misordered(const void *fdt,
 			      int mem_rsv_size, int struct_size)
 {

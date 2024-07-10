@@ -61,6 +61,7 @@ include $(srcdir)/kexec/arch/ppc64/Makefile
 include $(srcdir)/kexec/arch/s390/Makefile
 include $(srcdir)/kexec/arch/sh/Makefile
 include $(srcdir)/kexec/arch/x86_64/Makefile
+include $(srcdir)/kexec/libfdt/Makefile
 
 KEXEC_SRCS += $($(ARCH)_KEXEC_SRCS)
 
@@ -75,7 +76,7 @@ KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
 
 -include $(KEXEC_DEPS)
 
-$(KEXEC): $(KEXEC_OBJS) $(UTIL_LIB)
+$(KEXEC): $(KEXEC_OBJS) $(UTIL_LIB) $(FDT_LIB)
 	@$(MKDIR) -p $(@D)
 	$(LINK.o) -o $@ $^ $(LIBS)
 

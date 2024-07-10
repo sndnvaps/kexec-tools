@@ -166,6 +166,9 @@ include $(srcdir)/kexec/Makefile
 #
 include $(srcdir)/kdump/Makefile
 
+# libfdt
+include $(srcdir)/kexec/libfdt/Makefile
+
 #
 # kexec_test (test program)
 #

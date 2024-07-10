@@ -56,7 +56,7 @@ $(PURGATORY): CPPFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS) \
 			-I$(srcdir)/include \
 			-I$(shell $(CC) -print-file-name=include)
 $(PURGATORY): LDFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS)\
-			--no-undefined -nostartfiles -nostdlib -nodefaultlibs \
+			-nostartfiles -nostdlib -nodefaultlibs \
 			-e purgatory_start -r
 
 $(PURGATORY): $(PURGATORY_OBJS)
