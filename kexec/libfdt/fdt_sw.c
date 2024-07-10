@@ -55,6 +55,11 @@
 
 #include "libfdt_internal.h"
 
+#include <string.h>
+
+extern void *memmove(void *str1, const void *str2, size_t n);
+extern size_t strlen(const char *string);
+
 static int _fdt_sw_check_header(void *fdt)
 {
 	if (fdt_magic(fdt) != FDT_SW_MAGIC)

@@ -4,20 +4,19 @@
 # be easily embeddable into other systems of Makefiles.
 #
 
-LIBFDT_INCLUDES = fdt.h libfdt.h
 LIBFDT_SRCS = kexec/libfdt/fdt.c kexec/libfdt/fdt_ro.c \
 	kexec/libfdt/fdt_wip.c kexec/libfdt/fdt_sw.c \
 	kexec/libfdt/fdt_rw.c kexec/libfdt/fdt_strerror.c
-LIBFDT_OBJS = $(LIBFDT_SRCS:%.c=%.o)
-FDT_LIB =libfdt.a
 
 LIBFDT_OBJS = $(call objify, $(LIBFDT_SRCS))
-KEXEC_DEPS = $(call depify, $(LIBFDT_OBJS))
 
-dist += kexec/libfdt/Makefile.libfdt			\
+FDT_LIB = libfdt.a
+
+dist += kexec/libfdt/Makefile	$(LIBFDT_SRCS)	\
 	kexec/libfdt/fdt.h kexec/libfdt/libfdt.h	\
 	kexec/libfdt/libfdt_env.h			\
 	kexec/libfdt/libfdt_internal.h
+clean += $(LIBFDT_OBJS)  $(FDT_LIB)
 
 $(FDT_LIB):$(LIBFDT_OBJS)
 	@$(MKDIR) -p $(@D)

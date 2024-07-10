@@ -57,6 +57,9 @@
 
 #include <string.h>
 
+extern void *memmove(void *str1, const void *str2, size_t n);
+extern size_t strlen(const char *string);
+
 static int _fdt_blocks_misordered(const void *fdt,
 			      int mem_rsv_size, int struct_size)
 {

@@ -9,7 +9,9 @@
 #include <fcntl.h>
 #include <endian.h>
 #include <elf.h>
+#include <errno.h>
 
+extern char *strerror(int errnum);
 #if !defined(__BYTE_ORDER) || !defined(__LITTLE_ENDIAN) || !defined(__BIG_ENDIAN)
 #error Endian defines missing
 #endif

@@ -55,6 +55,13 @@
 
 #include "libfdt_internal.h"
 
+
+#include <string.h>
+
+extern size_t strlen(const char *string);
+extern void *memchr(const void *str, int c, size_t n);
+
+
 static int _fdt_nodename_eq(const void *fdt, int offset,
 			    const char *s, int len)
 {
