@@ -1004,6 +1004,7 @@ void usage(void)
 	       "                      (0 means it's not jump back or\n"
 	       "                      preserve context)\n"
 	       "                      to original kernel.\n"
+		   "     --load-hardboot  Load the new kernel and hard boot it.\n"
 	       " -s, --kexec-file-syscall Use file based syscall for kexec operation\n"
 	       " -d, --debug          Enable debugging to help spot a failure.\n"
 	       " -S, --status         Return 0 if the type (by default crash) is loaded.\n"
@@ -1229,7 +1230,7 @@ static void print_crashkernel_region_size(void)
 		return;
 	}
 
-	printf("%lu\n", (start != end) ? (end - start + 1) : 0UL);
+	printf("%llu\n", (start != end) ? (end - start + 1) : 0UL);
 }
 
 int main(int argc, char *argv[])
@@ -1391,6 +1392,12 @@ int main(int argc, char *argv[])
 		case OPT_PRINT_CKR_SIZE:
 			print_crashkernel_region_size();
 			return 0;
+		case OPT_LOAD_HARDBOOT:
+			do_load = 1;
+			do_exec = 0;
+			do_shutdown = 0;
+			kexec_flags = KEXEC_HARDBOOT;
+			break;
 		default:
 			break;
 		}
@@ -1400,7 +1407,7 @@ int main(int argc, char *argv[])
 		do_ifdown = 0;
 	if (skip_sync)
 		do_sync = 0;
-
+	
 	if (do_status) {
 		if (kexec_flags == 0)
 			kexec_flags = KEXEC_ON_CRASH;
@@ -1414,6 +1421,7 @@ int main(int argc, char *argv[])
 		do_exec = 0;
 		do_load_jump_back_helper = 0;
 	}
+	
 
 	if (do_load && (kexec_flags & KEXEC_ON_CRASH) &&
 	    !is_crashkernel_mem_reserved()) {
@@ -1430,6 +1438,11 @@ int main(int argc, char *argv[])
 		    "\"--mem-max\" parameter\n");
 	}
 
+	if (do_load && (kexec_flags & KEXEC_HARDBOOT) && mem_min == 0) {
+		printf("Please specify memory range used by kexeced kernel\n");
+		printf("to avoid being overwritten by on reboot with the\n");
+		die("\"--min-max\" parameter\n");
+	}
 	fileind = optind;
 	/* Reset getopt for the next pass; called in other source modules */
 	opterr = 1;
