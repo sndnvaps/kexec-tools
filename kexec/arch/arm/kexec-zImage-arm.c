@@ -10,9 +10,10 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <unistd.h>
 #include <libfdt.h>
 #include <arch/options.h>
 #include "../../kexec.h"
@@ -21,6 +22,7 @@
 #include "../../fs2dt.h"
 #include "crashdump-arm.h"
 #include "iomem.h"
+#include "mach.h"
 
 #define BOOT_PARAMS_SIZE 1536
 
@@ -129,7 +131,9 @@ void zImage_arm_usage(void)
 		"     --append=STRING       Set the kernel command line to STRING.\n"
 		"     --initrd=FILE         Use FILE as the kernel's initial ramdisk.\n"
 		"     --ramdisk=FILE        Use FILE as the kernel's initial ramdisk.\n"
-		"     --dtb=FILE            Use FILE as the fdt blob.\n"
+		"     --dtb(=dtb.img)       Load dtb from zImage, dtb.img or /proc/device-tree instead of using atags.\n"
+		"                           DTB appended to zImage and dtb.img currently only works on MSM devices.\n"
+		"     --boardname=NAME      Required if using DTB. Options: m8 hammerhead bacon d851 shamu\n"
 		"     --atags               Use ATAGs instead of device-tree.\n"
 		"     --page-offset=PAGE_OFFSET\n"
 		"                           Set PAGE_OFFSET of crash dump vmcore\n"
@@ -283,7 +287,7 @@ int atag_arm_load(struct kexec_info *info, unsigned long base,
 	return 0;
 }
 
-static int setup_dtb_prop(char **bufp, off_t *sizep, int parentoffset,
+int setup_dtb_prop(char **bufp, off_t *sizep, int parentoffset,
 		const char *node_name, const char *prop_name,
 		const void *val, int len)
 {
@@ -345,6 +349,84 @@ static int setup_dtb_prop(char **bufp, off_t *sizep, int parentoffset,
 	return 0;
 }
 
+#define DTB_MAGIC               0xedfe0dd0
+#define DTB_OFFSET              0x2C
+#define DTB_PAD_SIZE            65536
+
+static int get_appended_dtb(const char *kernel, off_t kernel_len, char **dtb_img, off_t *dtb_img_len)
+{
+	uint32_t app_dtb_offset = 0;
+	char *kernel_end = (char*)kernel + kernel_len;
+	char *dtb;
+
+	memcpy((void*) &app_dtb_offset, (void*) (kernel + DTB_OFFSET), sizeof(uint32_t));
+
+	dtb = (char*)kernel + app_dtb_offset;
+	if(dtb >= kernel_end)
+	{
+		fprintf(stderr, "DTB: Failed to load dtb appended to zImage, invalid offset!");
+		return 0;
+	}
+
+	*dtb_img = dtb;
+	*dtb_img_len = kernel_end - dtb;
+	return 1;
+}
+
+static int load_dtb_image(const char *path, char **dtb_img, off_t *dtb_img_len)
+{
+	int fd;
+	struct stat info;
+	char buff[4];
+	char *img = NULL;
+	off_t size;
+
+	if(stat(path, &info) < 0)
+	{
+		fprintf(stderr, "DTB: Failed to stat() dtb image %s\n", path);
+		return 0;
+	}
+
+	if(info.st_size <= 2048)
+	{
+		fprintf(stderr, "DTB: invalid dtb image (too small) %s\n", path);
+		return 0;
+	}
+
+	fd = open(path, O_RDONLY);
+	if(fd < 0)
+	{
+		fprintf(stderr, "DTB: Failed to open dtb image %s\n", path);
+		return 0;
+	}
+
+	if(read(fd, buff, 4) != 4 || strncmp(buff, "QCDT", 4) != 0)
+	{
+		fprintf(stderr, "DTB: Invalid dtb image header in %s\n", path);
+		close(fd);
+		return 0;
+	}
+
+	// skip header
+	size = info.st_size - 2048;
+	lseek(fd, 2048, SEEK_SET);
+
+	img = xmalloc(size);
+	if(read(fd, img, size) != size)
+	{
+		fprintf(stderr, "Failed to read %lld bytes from dtb image %s\n", size, path);
+		free(img);
+		close(fd);
+		return 0;
+	}
+
+	*dtb_img = img;
+	*dtb_img_len = size;
+
+	close(fd);
+	return 1;
+}
+
 int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info)
 {
@@ -359,11 +441,13 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	const char *ramdisk_buf;
 	int opt;
 	int use_atags;
+	int use_dtb;
 	char *dtb_buf;
 	off_t dtb_length;
 	char *dtb_file;
 	off_t dtb_offset;
 	char *end;
+	struct arm_mach *mach;
 
 	/* See options.h -- add any more there, too. */
 	static const struct option options[] = {
@@ -372,13 +456,14 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		{ "append",		1, 0, OPT_APPEND },
 		{ "initrd",		1, 0, OPT_RAMDISK },
 		{ "ramdisk",		1, 0, OPT_RAMDISK },
-		{ "dtb",		1, 0, OPT_DTB },
+		{ "dtb",		2, 0, OPT_DTB },
 		{ "atags",		0, 0, OPT_ATAGS },
 		{ "image-size",		1, 0, OPT_IMAGE_SIZE },
 		{ "page-offset",	1, 0, OPT_PAGE_OFFSET },
+		{ "boardname",  1, 0, OPT_BOARDNAME },
 		{ 0, 			0, 0, 0 },
 	};
-	static const char short_options[] = KEXEC_ARCH_OPT_STR "a:r:";
+	static const char short_options[] = KEXEC_ARCH_OPT_STR "a:r:d::b:";
 
 	/*
 	 * Parse the command line arguments
@@ -389,7 +474,9 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	ramdisk_buf = 0;
 	initrd_size = 0;
 	use_atags = 0;
+	use_dtb = 0;
 	dtb_file = NULL;
+	mach = NULL;
 	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
 		switch(opt) {
 		default:
@@ -404,7 +491,9 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 			ramdisk = optarg;
 			break;
 		case OPT_DTB:
-			dtb_file = optarg;
+			use_dtb = 1;
+			if (optarg)
+				dtb_file = optarg;
 			break;
 		case OPT_ATAGS:
 			use_atags = 1;
@@ -414,6 +503,14 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 			break;
 		case OPT_PAGE_OFFSET:
 			user_page_offset = strtoull(optarg, &end, 0);
+			break;
+		case OPT_BOARDNAME:
+			mach = arm_mach_choose(optarg);
+			if(!mach)
+			{
+				fprintf(stderr, "Unknown boardname '%s'!\n", optarg);
+				return -1;
+			}
 			break;
 		}
 	}
@@ -584,30 +681,72 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		                  ramdisk_buf, initrd_size, initrd_base) == -1)
 			return -1;
 	} else {
+		// use dtb from dtb.img or from append zImage
+
+		char *dtb_img = NULL;
+		off_t dtb_img_len = 0;
+		int free_dtb_img = 0;
+		int choose_res = 0;
+		int ret, off;
+
+		if(!mach)
+		{
+			fprintf(stderr, "DTB: --boardname was not specified.\n");
+			return -1;
+		}
 		/*
 		 * Read a user-specified DTB file.
 		 */
 		if (dtb_file) {
-			if (fdt_check_header(dtb_buf) != 0) {
-				fprintf(stderr, "Invalid FDT buffer.\n");
+			//if (fdt_check_header(dtb_buf) != 0) {
+			//	fprintf(stderr, "Invalid FDT buffer.\n");
+			//	return -1;
+			//}
+			if(!load_dtb_image(dtb_file, &dtb_img, &dtb_img_len))
 				return -1;
-			}
 
-			if (command_line) {
-				/*
-				 *  Error should have been reported so
-				 *  directly return -1
-				 */
-				if (setup_dtb_prop(&dtb_buf, &dtb_length, 0, "chosen",
-						"bootargs", command_line,
-						strlen(command_line) + 1))
-					return -1;
-			}
+			printf("DTB: Using DTB from file %s\n", dtb_file);
+			free_dtb_img = 1;
 		} else {
+			if(!get_appended_dtb(buf, len, &dtb_img, &dtb_img_len))
+				return -1;
+
+			printf("DTB: Using DTB appended to zImage\n");
+		}
+		choose_res = (mach->choose_dtb)(dtb_img, dtb_img_len, &dtb_buf, &dtb_length);
+
+		if(free_dtb_img)
+			free(dtb_img);
+
+		if(!choose_res)
+		{
+			fprintf(stderr, "Failed to load DTB!\n");
+			return -1;
+		}
+
+		dtb_length = fdt_totalsize(dtb_buf) + DTB_PAD_SIZE;
+		dtb_buf = xrealloc(dtb_buf, dtb_length);
+		ret = fdt_open_into(dtb_buf, dtb_buf, dtb_length);
+		if(ret)
+			die("DTB: fdt_open_into failed");
+
+		ret = (mach->add_extra_regs)(dtb_buf,dtb_length);
+		if (ret < 0)
+		{
+			fprintf(stderr, "DTB: error while adding mach-specific extra regs\n");
+			return -1;
+		}
+
+
+		if (command_line) {
 			/*
-			 * Extract the DTB from /proc/device-tree.
-			 */
-			create_flatten_tree(&dtb_buf, &dtb_length, command_line);
+			*  Error should have been reported so
+			*  directly return -1
+			*/
+			if (setup_dtb_prop(&dtb_buf, &dtb_length, 0, "chosen",
+					"bootargs", command_line,
+					strlen(command_line) + 1))
+					return -1;
 		}
 
 		/*

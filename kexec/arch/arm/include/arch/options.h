@@ -5,11 +5,12 @@
 #define OPT_ARCH_MAX		(OPT_MAX+1)
 
 #define OPT_APPEND	'a'
+#define OPT_BOARDNAME 'b'
 #define OPT_RAMDISK	'r'
-#define OPT_DTB		(OPT_ARCH_MAX+0)
-#define OPT_ATAGS	(OPT_ARCH_MAX+1)
-#define OPT_IMAGE_SIZE	(OPT_ARCH_MAX+2)
-#define OPT_PAGE_OFFSET	(OPT_ARCH_MAX+3)
+#define OPT_DTB	'd'
+#define OPT_ATAGS	(OPT_ARCH_MAX+0)
+#define OPT_IMAGE_SIZE	(OPT_ARCH_MAX+1)
+#define OPT_PAGE_OFFSET	(OPT_ARCH_MAX+2)
 
 /* Options relevant to the architecture (excluding loader-specific ones),
  * in this case none:
@@ -40,12 +41,13 @@
 	{ "append",		1, 0, OPT_APPEND },	\
 	{ "initrd",		1, 0, OPT_RAMDISK },	\
 	{ "ramdisk",		1, 0, OPT_RAMDISK },	\
-	{ "dtb",		1, 0, OPT_DTB }, 	\
+	{ "dtb",		2, 0, OPT_DTB }, 	\
 	{ "atags",		0, 0, OPT_ATAGS },	\
 	{ "image-size",		1, 0, OPT_IMAGE_SIZE }, \
-	{ "page-offset",	1, 0, OPT_PAGE_OFFSET },
+	{ "page-offset",	1, 0, OPT_PAGE_OFFSET }, \
+	{ "boardname",  1, 0, OPT_BOARDNAME },
 
-#define KEXEC_ALL_OPT_STR KEXEC_ARCH_OPT_STR "a:r:s:"
+#define KEXEC_ALL_OPT_STR KEXEC_ARCH_OPT_STR "a:r:d::s:b:"
 
 extern unsigned int kexec_arm_image_size;
 
