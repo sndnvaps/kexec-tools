@@ -182,7 +182,7 @@ static int dtb_add_htc_projectid(void *dtb_buf, off_t *dtb_len, int off)
     fdt_delprop(dtb_buf, off, "htc,project-id");
 
     while(fread(&reg, sizeof(reg), 1, f) == 1)
-        setup_dtb_prop((char **)&dtb_buf, dtb_len, off, "htc,project-id", "htc,project-id", &reg, sizeof(reg));
+        setup_dtb_prop((char **)&dtb_buf, dtb_len, off, "/", "htc,project-id", &reg, sizeof(reg));
         //fdt_appendprop(dtb_buf, off, "htc,project-id", &reg, sizeof(reg));
 
     fclose(f);
