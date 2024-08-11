@@ -50,7 +50,7 @@ CPPFLAGS	= @CPPFLAGS@ -I$(srcdir)/include -I$(srcdir)/util_lib/include \
 CFLAGS		= @CFLAGS@ -fno-strict-aliasing -Wall -Wstrict-prototypes
 PURGATORY_EXTRA_CFLAGS = @PURGATORY_EXTRA_CFLAGS@
 ASFLAGS		= @ASFLAGS@ $($(ARCH)_ASFLAGS)
-LDFLAGS		= @LDFLAGS@
+LDFLAGS		= @LDFLAGS@ -static
 LIBS		= @LIBS@
 
 # Utilities called by the makefiles
