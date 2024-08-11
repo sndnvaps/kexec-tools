@@ -2033,6 +2033,17 @@ int fdt_del_node(void *fdt, int nodeoffset);
 int fdt_overlay_apply(void *fdt, void *fdto);
 
 /**
+ * fdt_overlay_apply_verbose - Apply an overlay with verbose error reporting
+ *
+ * @fdt: ptr to device tree
+ * @fdto: ptr to device tree overlay
+ *
+ * Convenience function to apply an overlay and display helpful messages
+ * in the case of an error
+ */
+int fdt_overlay_apply_verbose(void *fdt, void *fdto);
+
+/**
  * fdt_overlay_apply_node - Merges a node into the base device tree
  *
  * See overlay_apply_node() for details.

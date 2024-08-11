@@ -4,6 +4,8 @@
  * Copyright (C) 2016 Free Electrons
  * Copyright (C) 2016 NextThing Co.
  */
+#include <stdio.h>
+
 #include "libfdt_env.h"
 
 #include <fdt.h>
@@ -883,4 +885,33 @@ err:
 int fdt_overlay_apply_node(void *fdt, int target, void *fdto, int node)
 {
 	return overlay_apply_node(fdt, target, fdto, node);
+}
+
+/**
+ * fdt_overlay_apply_verbose - Apply an overlay with verbose error reporting
+ *
+ * @fdt: ptr to device treef
+ * @fdto: ptr to device tree overlay
+ *
+ * Convenience function to apply an overlay and display helpful messages
+ * in the case of an error
+ */
+int fdt_overlay_apply_verbose(void *fdt, void *fdto)
+{
+	int err;
+	bool has_symbols;
+
+	err = fdt_path_offset(fdt, "/__symbols__");
+	has_symbols = err >= 0;
+
+	err = fdt_overlay_apply(fdt, fdto);
+	if (err < 0) {
+		printf("failed on fdt_overlay_apply(): %s\n",
+				fdt_strerror(err));
+		if (!has_symbols) {
+			printf("base fdt does not have a /__symbols__ node\n");
+			printf("make sure you've compiled with -@\n");
+		}
+	}
+	return err;
 }

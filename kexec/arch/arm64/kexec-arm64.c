@@ -24,6 +24,7 @@
 #include "iomem.h"
 #include "kexec-syscall.h"
 #include "arch/options.h"
+#include "arch/dt_table.h"
 
 #define ROOT_NODE_ADDR_CELLS_DEFAULT 1
 #define ROOT_NODE_SIZE_CELLS_DEFAULT 1
@@ -186,7 +187,7 @@ struct dtb {
  * @path: Filesystem path.
  */
 
-struct dtbo {
+struct dtbo_img {
 	char *buf;
 	off_t size;
 	const char *name;
@@ -543,6 +544,128 @@ unsigned long arm64_locate_kernel_segment(struct kexec_info *info)
 	return hole;
 }
 
+#define DTBOIMG_BUF_SIZE	(1024 * 1024 * 2)
+//#define DTO_PARTION			("dtbo")
+#define DTBO_COUNT			(10)
+
+int dtbo_idx[DTBO_COUNT];
+
+int check_dtbo_idx(void)
+{
+	if (dtbo_idx[0] == 0xf5f5f5f5) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int check_dtbo(void *dtboimg_buf, int *dtbo_entry_offset)
+{
+    struct dt_table_header *dt_table_head = NULL;
+    struct dt_table_entry  *dt_table_entry = NULL;
+    uint32_t i = 0;
+    uint32_t entry_count = 0;
+
+	dt_table_head = (struct dt_table_header *) dtboimg_buf;
+#if 0
+    dto_error("dtboimg magic is:0x%x\n", dt_table_header_magic(dtboimg_buf));
+    dto_error("dtboimg total size is:0x%x\n", dt_table_header_total_size(dtboimg_buf));
+    dto_error("dtboimg header size:0x%x\n", dt_table_header_header_size(dtboimg_buf));
+    dto_error("dtboimg entry size:0x%x\n", dt_table_header_dt_entry_size(dtboimg_buf));
+    dto_error("dtboimg entry count:0x%x\n", dt_table_header_dt_entry_count(dtboimg_buf));
+    dto_error("dtboimg entry offset:0x%x\n", dt_table_header_dt_entries_offset(dtboimg_buf));
+#endif
+	if (dt_table_header_magic(dtboimg_buf) != DT_TABLE_MAGIC) {
+		dto_error("dtboimg magic is bad:0x%x\n", dt_table_header_magic(dtboimg_buf));
+		return -1;
+	}
+	entry_count = dt_table_header_dt_entry_count(dtboimg_buf);
+	if (entry_count == 0) {
+		dto_error("dtboimg dt_entry_count is :0x%x\n", entry_count);
+		return -2;
+	}
+	dtbo_entry_offset[0] = dt_table_header_dt_entries_offset(dtboimg_buf);
+    for (i = 0; i < entry_count; i++) {
+		dt_table_entry = (struct dt_table_entry *) ((char *)dt_table_head + dt_table_header_header_size(dtboimg_buf) + (dt_table_header_dt_entry_size(dtboimg_buf) * i));
+#if 0
+    dto_error("dt_table_entry_dt_size:0x%x\n", dt_table_entry_dt_size(dt_table_entry));
+    dto_error("dt_table_entry_dt_offset:0x%x\n", dt_table_entry_dt_offset(dt_table_entry));
+    dto_error("dt_table_entry_id:0x%x\n", dt_table_entry_id(dt_table_entry));
+    dto_error("dt_table_entry_rev:0x%x\n", dt_table_entry_rev(dt_table_entry));
+    dto_error("dt_table_entry_custom0:0x%x\n", dt_table_entry_custom(dt_table_entry, 0));
+    dto_error("dt_table_entry_custom1:0x%x\n", dt_table_entry_custom(dt_table_entry, 1));
+    dto_error("dt_table_entry_custom2:0x%x\n", dt_table_entry_custom(dt_table_entry, 2));
+    dto_error("dt_table_entry_custom3:0x%x\n\n", dt_table_entry_custom(dt_table_entry, 3));
+#endif
+     dtbo_entry_offset[i] = dt_table_entry_dt_offset(dt_table_entry);
+    }
+
+    return entry_count;
+
+}
+
+int load_dtboimg(void *dtboimg_buf, size_t *dtboimg_size)
+{
+	char *argv[6];
+	char  dtboimg_head[32];
+	uint32_t dto_addr = (uint32_t)dtboimg_buf;
+
+	if (arm64_opts.dtbo) {
+		dtboimg_buf = slurp_file(arm64_opts.dtbo, &dtboimg_size);
+	}
+
+    return 0;
+}
+
+
+struct dtb arm64_load_dtbo(void) {
+	struct dtb dtb_info = {};
+	void *dtb_base;
+	void *dtboimg_buf;
+    int ret;
+	int i = 0;
+	int dt_entry_count;
+	int offset;
+	int dtbo_entry_offset[DTBO_COUNT] = {0};
+	size_t *dtboimg_size = 0;
+
+	ret = load_dtboimg(dtboimg_buf, dtboimg_size);
+    if (ret < 0) {
+		dto_error("load_dtbo fail\n");
+		free(dtboimg_buf);
+		return dtb_info;
+    }
+	memset((void *)dtbo_entry_offset, 0x0, sizeof(dtbo_entry_offset));
+	dt_entry_count = check_dtbo(dtboimg_buf, dtbo_entry_offset);
+	dto_debug("dt_entry_count= %d\n", dt_entry_count);
+	if (dt_entry_count < 0) {
+		dto_error("don't have match dtbo\n");
+		free(dtboimg_buf);
+		return dtb_info;
+	}
+	while (dtbo_idx[i] != 0xf5f5f5f5) {
+		if (dtbo_idx[i] > dt_entry_count) {
+			dto_error("androidboot.dtbo_idx is %d > dtboimg %d\n", dtbo_idx[i], dt_entry_count);
+			return dtb_info;
+		}
+		offset = dtbo_entry_offset[dtbo_idx[i]];
+		dto_debug("offset= 0x%x\n", offset);
+		dto_debug("dtbo_idx_%d overlay_size=0x%x\n", dtbo_idx[i], fdt_totalsize(dtboimg_buf + offset));
+		if (fdt_overlay_apply_verbose(dtb_base, (dtboimg_buf + offset)) < 0) {
+			dto_error(" merge fdt fail\n");
+			free(dtboimg_buf);
+			return dtb_info;
+		}
+		dto_debug("dtbo_idx_%d merge sucess, size=0x%x \n", dtbo_idx[i], fdt_totalsize(dtb_base));
+		i++;
+
+	}
+	dtb_info.buf = (char *)dtb_base;
+	dtb_info.size = fdt_totalsize(dtb_base);
+	return dtb_info;
+}
+
+
 /**
  * arm64_load_other_segments - Prepare the dtb, initrd and purgatory segments.
  */
@@ -557,7 +680,6 @@ int arm64_load_other_segments(struct kexec_info *info,
 	unsigned long initrd_end;
 	char *initrd_buf = NULL;
 	struct dtb dtb;
-	struct dtbo dtbo;
 	char command_line[COMMAND_LINE_SIZE] = "";
 
 	if (arm64_opts.command_line) {
@@ -566,16 +688,13 @@ int arm64_load_other_segments(struct kexec_info *info,
 		command_line[sizeof(command_line) - 1] = 0;
 	}
 
-	if (arm64_opts.dtbo) {
-			dtbo.buf = slurp_file(arm64_opts.dtbo, &dtbo.size);
-	}
-
 	if (arm64_opts.dtb && arm64_opts.dtbo) {
+		dtb = arm64_load_dtbo();
+		dtb.name = "dtb_user";
+	} else if (arm64_opts.dtb) {
 		dtb.name = "dtb_user";
 		dtb.buf = slurp_file(arm64_opts.dtb, &dtb.size);
-		dtbo.buf = slurp_file(arm64_opts.dtbo, &dtbo.size);
-		result = fdt_overlay_app(dtb.buf, dtbo.buf);
-	} else if (arm_opts.dtb) {
+	} else {
 		result = read_1st_dtb(&dtb);
 
 		if (result) {

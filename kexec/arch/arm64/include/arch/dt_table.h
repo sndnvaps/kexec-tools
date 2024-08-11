@@ -59,4 +59,34 @@ struct dt_table_entry_v1 {
   uint32_t custom[3];  /* optional, must be zero if unused */
 };
 
+
+//#define	UFDT_DEBUG
+#define dto_error(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
+
+#ifdef UFDT_DEBUG
+#define dto_print(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
+#define dto_debug(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
+#else
+#define dto_print(fmt, args...)				{}
+#define dto_debug(fmt, args...)				{}
+#endif
+
+#define dt_table_header_get_header(dtboimg, field)\
+	(fdt32_to_cpu(((const struct dt_table_header *)(dtboimg))->field))
+#define dt_table_header_magic(dtboimg)			(dt_table_header_get_header(dtboimg, magic))
+#define dt_table_header_total_size(dtboimg)			(dt_table_header_get_header(dtboimg, total_size))
+#define dt_table_header_header_size(dtboimg)			(dt_table_header_get_header(dtboimg, header_size))
+#define dt_table_header_dt_entry_size(dtboimg)			(dt_table_header_get_header(dtboimg, dt_entry_size))
+#define dt_table_header_dt_entry_count(dtboimg)			(dt_table_header_get_header(dtboimg, dt_entry_count))
+#define dt_table_header_dt_entries_offset(dtboimg)			(dt_table_header_get_header(dtboimg, dt_entries_offset))
+
+
+#define dt_table_entry_get_header(dtboimg, field)\
+	(fdt32_to_cpu(((const struct dt_table_entry *)(dtboimg))->field))
+#define dt_table_entry_dt_size(dtboimg)			(dt_table_entry_get_header(dtboimg, dt_size))
+#define dt_table_entry_dt_offset(dtboimg)			(dt_table_entry_get_header(dtboimg, dt_offset))
+#define dt_table_entry_id(dtboimg)			        (dt_table_entry_get_header(dtboimg, id))
+#define dt_table_entry_rev(dtboimg)			(dt_table_entry_get_header(dtboimg, rev))
+#define dt_table_entry_custom(dtboimg, n)			(dt_table_entry_get_header(dtboimg, custom[n]))
+
 #endif
