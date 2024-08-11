@@ -135,6 +135,9 @@ int arch_process_options(int argc, char **argv)
 		case OPT_DTB:
 			arm64_opts.dtb = optarg;
 			break;
+		case OPT_DTBO:
+			arm64_opts.dtbo = optarg;
+			break;
 		case OPT_INITRD:
 			arm64_opts.initrd = optarg;
 			break;
@@ -150,6 +153,9 @@ int arch_process_options(int argc, char **argv)
 	dbgprintf("%s:%d: initrd: %s\n", __func__, __LINE__,
 		arm64_opts.initrd);
 	dbgprintf("%s:%d: dtb: %s\n", __func__, __LINE__, arm64_opts.dtb);
+	if (arm64_opts.dtbo) {
+		dbgprintf("%s:%d: dtbo: %s\n", __func__, __LINE__, arm64_opts.dtbo);
+	}
 
 	return 0;
 }
@@ -164,6 +170,23 @@ int arch_process_options(int argc, char **argv)
  */
 
 struct dtb {
+	char *buf;
+	off_t size;
+	const char *name;
+	const char *path;
+};
+
+
+/**
+ * struct dtbo - Info about a binary device tree.
+ *
+ * @buf: Device tree overlay data.
+ * @size: Device tree data overlay size.
+ * @name: Shorthand name of this dtbo for messages.
+ * @path: Filesystem path.
+ */
+
+struct dtbo {
 	char *buf;
 	off_t size;
 	const char *name;
@@ -534,6 +557,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 	unsigned long initrd_end;
 	char *initrd_buf = NULL;
 	struct dtb dtb;
+	struct dtbo dtbo;
 	char command_line[COMMAND_LINE_SIZE] = "";
 
 	if (arm64_opts.command_line) {
@@ -542,10 +566,16 @@ int arm64_load_other_segments(struct kexec_info *info,
 		command_line[sizeof(command_line) - 1] = 0;
 	}
 
-	if (arm64_opts.dtb) {
+	if (arm64_opts.dtbo) {
+			dtbo.buf = slurp_file(arm64_opts.dtbo, &dtbo.size);
+	}
+
+	if (arm64_opts.dtb && arm64_opts.dtbo) {
 		dtb.name = "dtb_user";
 		dtb.buf = slurp_file(arm64_opts.dtb, &dtb.size);
-	} else {
+		dtbo.buf = slurp_file(arm64_opts.dtbo, &dtbo.size);
+		result = fdt_overlay_app(dtb.buf, dtbo.buf);
+	} else if (arm_opts.dtb) {
 		result = read_1st_dtb(&dtb);
 
 		if (result) {
