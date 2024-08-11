@@ -606,15 +606,12 @@ int check_dtbo(void *dtboimg_buf, int *dtbo_entry_offset)
 
 int load_dtboimg(void *dtboimg_buf, size_t *dtboimg_size)
 {
-	char *argv[6];
-	char  dtboimg_head[32];
-	uint32_t dto_addr = (uint32_t)dtboimg_buf;
-
 	if (arm64_opts.dtbo) {
 		dtboimg_buf = slurp_file(arm64_opts.dtbo, &dtboimg_size);
+		return 0;
 	}
 
-    return 0;
+    return -1;
 }
 
 

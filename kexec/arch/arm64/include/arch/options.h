@@ -13,7 +13,7 @@
 	{ "append",        1, NULL, OPT_APPEND }, \
 	{ "command-line",  1, NULL, OPT_APPEND }, \
 	{ "dtb",           1, NULL, OPT_DTB }, \
-	{ "dtbo",          0, NULL, OPT_DTBO }, \
+	{ "dtbo",          1, NULL, OPT_DTBO }, \
 	{ "initrd",        1, NULL, OPT_INITRD }, \
 	{ "ramdisk",       1, NULL, OPT_INITRD }, \
 	{ "reuse-cmdline", 0, NULL, OPT_REUSE_CMDLINE }, \
