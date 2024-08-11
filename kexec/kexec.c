@@ -1242,7 +1242,7 @@ static void print_crashkernel_region_size(void)
 		return;
 	}
 
-	printf("%llu\n", (start != end) ? (end - start + 1) : 0UL);
+	printf("%lu\n", (start != end) ? (end - start + 1) : 0UL);
 }
 
 int main(int argc, char *argv[])
@@ -1450,11 +1450,14 @@ int main(int argc, char *argv[])
 		    "\"--mem-max\" parameter\n");
 	}
 
+#ifndef __aarch64__
 	if (do_load && (kexec_flags & KEXEC_HARDBOOT) && mem_min == 0) {
 		printf("Please specify memory range used by kexeced kernel\n");
 		printf("to avoid being overwritten by on reboot with the\n");
 		die("\"--min-max\" parameter\n");
 	}
+#endif
+
 	fileind = optind;
 	/* Reset getopt for the next pass; called in other source modules */
 	opterr = 1;
