@@ -27,6 +27,7 @@ arm64_PHYS_TO_VIRT =
 
 dist += $(arm64_KEXEC_SRCS) \
 	kexec/arch/arm64/include/arch/options.h \
+	kexec/arch/arm64/include/arch/dt_table.h \
 	kexec/arch/arm64/crashdump-arm64.h \
 	kexec/arch/arm64/image-header.h \
 	kexec/arch/arm64/iomem.h \
@@ -46,5 +47,21 @@ libfdt_SRCS += $(LIBFDT_SRCS:%=kexec/libfdt/%)
 arm64_CPPFLAGS += -I$(srcdir)/kexec/libfdt
 
 arm64_KEXEC_SRCS += $(libfdt_SRCS)
+
+endif
+
+ifdef HAVE_LIBUFDT
+
+LIBS += -lufdt
+
+else
+
+include $(srcdir)/kexec/libufdt/Makefile.libufdt
+
+libufdt_SRCS += $(LIBUFDT_SRCS:%=kexec/libufdt/%)
+
+arm64_CPPFLAGS += -I$(srcdir)/kexec/libufdt
+
+arm64_KEXEC_SRCS += $(libufdt_SRCS)
 
 endif

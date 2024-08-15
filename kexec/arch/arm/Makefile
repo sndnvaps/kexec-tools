@@ -29,6 +29,22 @@ arm_CPPFLAGS += -D_FILE_OFFSET_BITS=64
 
 arm_KEXEC_SRCS += $(libfdt_SRCS)
 
+ifdef HAVE_LIBUFDT
+
+LIBS += -lufdt
+
+else
+
+include $(srcdir)/kexec/libufdt/Makefile.libufdt
+
+libufdt_SRCS += $(LIBUFDT_SRCS:%=kexec/libufdt/%)
+
+arm_CPPFLAGS += -I$(srcdir)/kexec/libufdt
+
+arm_KEXEC_SRCS += $(libufdt_SRCS)
+
+endif
+
 arm_UIMAGE = kexec/kexec-uImage.c
 arm_PHYS_TO_VIRT = kexec/arch/arm/phys_to_virt.c
 

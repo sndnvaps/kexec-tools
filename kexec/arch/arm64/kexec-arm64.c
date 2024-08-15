@@ -9,6 +9,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <libfdt.h>
+#include <ufdt_overlay.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -133,11 +134,11 @@ int arch_process_options(int argc, char **argv)
 		case OPT_REUSE_CMDLINE:
 			cmdline = get_command_line();
 			break;
-		case OPT_DTB:
-			arm64_opts.dtb = optarg;
-			break;
 		case OPT_DTBO:
 			arm64_opts.dtbo = optarg;
+			break;
+		case OPT_DTB:
+			arm64_opts.dtb = optarg;
 			break;
 		case OPT_INITRD:
 			arm64_opts.initrd = optarg;
@@ -545,7 +546,7 @@ unsigned long arm64_locate_kernel_segment(struct kexec_info *info)
 }
 
 #define DTBOIMG_BUF_SIZE	(1024 * 1024 * 2)
-//#define DTO_PARTION			("dtbo")
+//#define DTBO_PARTION			("dtbo")
 #define DTBO_COUNT			(10)
 
 int dtbo_idx[DTBO_COUNT];
@@ -567,98 +568,149 @@ int check_dtbo(void *dtboimg_buf, int *dtbo_entry_offset)
     uint32_t entry_count = 0;
 
 	dt_table_head = (struct dt_table_header *) dtboimg_buf;
-#if 0
-    dto_error("dtboimg magic is:0x%x\n", dt_table_header_magic(dtboimg_buf));
-    dto_error("dtboimg total size is:0x%x\n", dt_table_header_total_size(dtboimg_buf));
-    dto_error("dtboimg header size:0x%x\n", dt_table_header_header_size(dtboimg_buf));
-    dto_error("dtboimg entry size:0x%x\n", dt_table_header_dt_entry_size(dtboimg_buf));
-    dto_error("dtboimg entry count:0x%x\n", dt_table_header_dt_entry_count(dtboimg_buf));
-    dto_error("dtboimg entry offset:0x%x\n", dt_table_header_dt_entries_offset(dtboimg_buf));
-#endif
+	if (kexec_debug) {
+    	dtbo_error("dtboimg magic is:0x%x\n", dt_table_header_magic(dtboimg_buf));
+    	dtbo_error("dtboimg total size is:0x%x\n", dt_table_header_total_size(dtboimg_buf));
+    	dtbo_error("dtboimg header size:0x%x\n", dt_table_header_header_size(dtboimg_buf));
+    	dtbo_error("dtboimg entry size:0x%x\n", dt_table_header_dt_entry_size(dtboimg_buf));
+    	dtbo_error("dtboimg entry count:0x%x\n", dt_table_header_dt_entry_count(dtboimg_buf));
+    	dtbo_error("dtboimg entry offset:0x%x\n", dt_table_header_dt_entries_offset(dtboimg_buf));
+	}
 	if (dt_table_header_magic(dtboimg_buf) != DT_TABLE_MAGIC) {
-		dto_error("dtboimg magic is bad:0x%x\n", dt_table_header_magic(dtboimg_buf));
+		dtbo_error("dtboimg magic is bad:0x%x\n", dt_table_header_magic(dtboimg_buf));
 		return -1;
 	}
 	entry_count = dt_table_header_dt_entry_count(dtboimg_buf);
 	if (entry_count == 0) {
-		dto_error("dtboimg dt_entry_count is :0x%x\n", entry_count);
+		dtbo_error("dtboimg dt_entry_count is :0x%x\n", entry_count);
 		return -2;
 	}
 	dtbo_entry_offset[0] = dt_table_header_dt_entries_offset(dtboimg_buf);
     for (i = 0; i < entry_count; i++) {
 		dt_table_entry = (struct dt_table_entry *) ((char *)dt_table_head + dt_table_header_header_size(dtboimg_buf) + (dt_table_header_dt_entry_size(dtboimg_buf) * i));
-#if 0
-    dto_error("dt_table_entry_dt_size:0x%x\n", dt_table_entry_dt_size(dt_table_entry));
-    dto_error("dt_table_entry_dt_offset:0x%x\n", dt_table_entry_dt_offset(dt_table_entry));
-    dto_error("dt_table_entry_id:0x%x\n", dt_table_entry_id(dt_table_entry));
-    dto_error("dt_table_entry_rev:0x%x\n", dt_table_entry_rev(dt_table_entry));
-    dto_error("dt_table_entry_custom0:0x%x\n", dt_table_entry_custom(dt_table_entry, 0));
-    dto_error("dt_table_entry_custom1:0x%x\n", dt_table_entry_custom(dt_table_entry, 1));
-    dto_error("dt_table_entry_custom2:0x%x\n", dt_table_entry_custom(dt_table_entry, 2));
-    dto_error("dt_table_entry_custom3:0x%x\n\n", dt_table_entry_custom(dt_table_entry, 3));
-#endif
+
+	if (kexec_debug) {
+    	dtbo_error("dt_table_entry_dt_size:0x%x\n", dt_table_entry_dt_size(dt_table_entry));
+    	dtbo_error("dt_table_entry_dt_offset:0x%x\n", dt_table_entry_dt_offset(dt_table_entry));
+    	dtbo_error("dt_table_entry_id:0x%x\n", dt_table_entry_id(dt_table_entry));
+    	dtbo_error("dt_table_entry_rev:0x%x\n", dt_table_entry_rev(dt_table_entry));
+    	dtbo_error("dt_table_entry_custom0:0x%x\n", dt_table_entry_custom(dt_table_entry, 0));
+    	dtbo_error("dt_table_entry_custom1:0x%x\n", dt_table_entry_custom(dt_table_entry, 1));
+    	dtbo_error("dt_table_entry_custom2:0x%x\n", dt_table_entry_custom(dt_table_entry, 2));
+    	dtbo_error("dt_table_entry_custom3:0x%x\n\n", dt_table_entry_custom(dt_table_entry, 3));
+	}
      dtbo_entry_offset[i] = dt_table_entry_dt_offset(dt_table_entry);
     }
 
     return entry_count;
 
 }
+struct dtb load_dtb() {
+	struct dtb dtb_info;
+	//set dtb_info.buf default value to NULL
+	dtb_info.buf = NULL;
 
-int load_dtboimg(void *dtboimg_buf, size_t *dtboimg_size)
-{
+	char *dtb_buf = NULL;
+	off_t dtb_size;
 	if (arm64_opts.dtbo) {
-		dtboimg_buf = slurp_file(arm64_opts.dtbo, &dtboimg_size);
-		return 0;
+		dbgprintf("load_dtboimg: in line %d",__LINE__);
+		dtb_buf = slurp_file(arm64_opts.dtb, &dtb_size);
+		if (dtb_buf == NULL) {
+			dbgprintf("load_dtb: failed in line: %d",__LINE__);
+			return dtb_info;
+		}
+		dtb_info.buf = dtb_buf;
+		dtb_info.size = dtb_size;
+		return dtb_info;
 	}
 
-    return -1;
+    return dtb_info;
+}
+
+struct dtbo_img load_dtboimg()
+{
+	struct dtbo_img dtbo_info;
+	//set dtbo_info.buf default value to NULL
+	dtbo_info.buf = NULL;
+
+	char *dtboimg_buf = NULL;
+	off_t dtboimg_size;
+	if (arm64_opts.dtbo) {
+		dbgprintf("load_dtboimg: in line %d",__LINE__);
+		dtboimg_buf = slurp_file(arm64_opts.dtbo, &dtboimg_size);
+		if (dtboimg_buf == NULL) {
+			dbgprintf("load_dtboimg: failed in line: %d",__LINE__);
+			return dtbo_info;
+		}
+		dtbo_info.buf = dtboimg_buf;
+		dtbo_info.size = dtboimg_size;
+		return dtbo_info;
+	}
+
+    return dtbo_info;
 }
 
 
 struct dtb arm64_load_dtbo(void) {
 	struct dtb dtb_info = {};
-	void *dtb_base;
-	void *dtboimg_buf;
-    int ret;
+	struct dtbo_img dtbo_info = {};
+	void *dtboimg_buf = NULL;
 	int i = 0;
 	int dt_entry_count;
 	int offset;
 	int dtbo_entry_offset[DTBO_COUNT] = {0};
-	size_t *dtboimg_size = 0;
+	struct fdt_header *main_fdt_header = NULL;
+	struct fdt_header *merged_fdt = NULL;
+	size_t main_fdt_size;
 
-	ret = load_dtboimg(dtboimg_buf, dtboimg_size);
-    if (ret < 0) {
-		dto_error("load_dtbo fail\n");
-		free(dtboimg_buf);
+	dbgprintf("arm64_load_dtb: in line %d",__LINE__);
+	dtb_info = load_dtb();
+	if (dtb_info.buf == NULL) {
+		dtbo_error("load_dtb fail\n");
 		return dtb_info;
     }
+	dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
+	dtbo_info = load_dtboimg();
+    if (dtbo_info.buf == NULL) {
+		dtbo_error("load_dtbo fail\n");
+		return dtb_info;
+    }
+	dtboimg_buf = dtbo_info.buf;
+
+    main_fdt_header = ufdt_install_blob((void *)dtb_info.buf, dtb_info.size);
+	main_fdt_size = dtb_info.size;
+
+	dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
 	memset((void *)dtbo_entry_offset, 0x0, sizeof(dtbo_entry_offset));
-	dt_entry_count = check_dtbo(dtboimg_buf, dtbo_entry_offset);
-	dto_debug("dt_entry_count= %d\n", dt_entry_count);
+	dt_entry_count = check_dtbo(dtbo_info.buf, dtbo_entry_offset);
+	dbgprintf("dt_entry_count= %d\n", dt_entry_count);
 	if (dt_entry_count < 0) {
-		dto_error("don't have match dtbo\n");
+		dtbo_error("don't have match dtbo\n");
 		free(dtboimg_buf);
 		return dtb_info;
 	}
 	while (dtbo_idx[i] != 0xf5f5f5f5) {
 		if (dtbo_idx[i] > dt_entry_count) {
-			dto_error("androidboot.dtbo_idx is %d > dtboimg %d\n", dtbo_idx[i], dt_entry_count);
+			dtbo_error("androidboot.dtbo_idx is %d > dtboimg %d\n", dtbo_idx[i], dt_entry_count);
 			return dtb_info;
 		}
 		offset = dtbo_entry_offset[dtbo_idx[i]];
-		dto_debug("offset= 0x%x\n", offset);
-		dto_debug("dtbo_idx_%d overlay_size=0x%x\n", dtbo_idx[i], fdt_totalsize(dtboimg_buf + offset));
-		if (fdt_overlay_apply_verbose(dtb_base, (dtboimg_buf + offset)) < 0) {
-			dto_error(" merge fdt fail\n");
-			free(dtboimg_buf);
+		dbgprintf("offset= 0x%x\n", offset);
+		dbgprintf("dtbo_idx_%d overlay_size=0x%x\n", dtbo_idx[i], fdt_totalsize(dtboimg_buf + offset));
+		merged_fdt = ufdt_apply_overlay(main_fdt_header, main_fdt_size,
+                                  dtboimg_buf + offset, fdt_totalsize(dtboimg_buf + offset));
+		if (merged_fdt == NULL) {
+			dtbo_error(" merge fdt fail\n");
 			return dtb_info;
 		}
-		dto_debug("dtbo_idx_%d merge sucess, size=0x%x \n", dtbo_idx[i], fdt_totalsize(dtb_base));
+		//merged_fdt_size = dtc_totalsize(merged_fdt);
+
+		dbgprintf("dtbo_idx_%d merge sucess, size=0x%x \n", dtbo_idx[i], fdt_totalsize(merged_fdt));
 		i++;
 
 	}
-	dtb_info.buf = (char *)dtb_base;
-	dtb_info.size = fdt_totalsize(dtb_base);
+	dtb_info.buf = (char *)merged_fdt;
+	dtb_info.size = fdt_totalsize(merged_fdt);
 	return dtb_info;
 }
 
@@ -684,13 +736,18 @@ int arm64_load_other_segments(struct kexec_info *info,
 			sizeof(command_line));
 		command_line[sizeof(command_line) - 1] = 0;
 	}
-
-	if (arm64_opts.dtb && arm64_opts.dtbo) {
-		dtb = arm64_load_dtbo();
-		dtb.name = "dtb_user";
-	} else if (arm64_opts.dtb) {
+	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+	if (arm64_opts.dtb) {
+	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 		dtb.name = "dtb_user";
 		dtb.buf = slurp_file(arm64_opts.dtb, &dtb.size);
+		if (arm64_opts.dtbo) {
+			dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+			dtb = arm64_load_dtbo();
+			dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+			dtb.name = "dtb_user";
+		}
+	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	} else {
 		result = read_1st_dtb(&dtb);
 
@@ -700,7 +757,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 			return EFAILED;
 		}
 	}
-
+	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	result = setup_2nd_dtb(&dtb, command_line,
 			info->kexec_flags & KEXEC_ON_CRASH);
 
@@ -714,7 +771,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 		hole_max = crash_reserved_mem.end;
 	else
 		hole_max = ULONG_MAX;
-
+	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	if (arm64_opts.initrd) {
 		initrd_buf = slurp_file(arm64_opts.initrd, &initrd_size);
 
@@ -760,7 +817,6 @@ int arm64_load_other_segments(struct kexec_info *info,
 
 	dtb_base = add_buffer_phys_virt(info, dtb.buf, dtb.size, dtb.size,
 		0, hole_min, hole_max, 1, 0);
-
 	/* dtb_base is valid if we got here. */
 
 	dbgprintf("dtb:    base %lx, size %lxh (%ld)\n", dtb_base, dtb.size,
@@ -776,7 +832,6 @@ int arm64_load_other_segments(struct kexec_info *info,
 
 	elf_rel_set_symbol(&info->rhdr, "arm64_dtb_addr", &dtb_base,
 		sizeof(dtb_base));
-
 	return 0;
 }
 

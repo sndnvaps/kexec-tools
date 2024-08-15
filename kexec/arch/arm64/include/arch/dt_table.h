@@ -60,15 +60,15 @@ struct dt_table_entry_v1 {
 };
 
 
-//#define	UFDT_DEBUG
-#define dto_error(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
+#define	UFDT_DEBUG
+#define dtbo_error(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
 
 #ifdef UFDT_DEBUG
-#define dto_print(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
-#define dto_debug(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
+#define dtbo_print(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
+#define dtbo_debug(fmt, args...)				dbgprintf("[ufdt]: "fmt, ##args)
 #else
-#define dto_print(fmt, args...)				{}
-#define dto_debug(fmt, args...)				{}
+#define dtbo_print(fmt, args...)				{}
+#define dtbo_debug(fmt, args...)				{}
 #endif
 
 #define dt_table_header_get_header(dtboimg, field)\
