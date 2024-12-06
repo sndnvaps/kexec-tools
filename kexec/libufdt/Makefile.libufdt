@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-2-Clause)
+# Makefile.libufdt
+#
+# This is not a complete Makefile of itself.  Instead, it is designed to
+# be easily embeddable into other systems of Makefiles.
+#
+
+LIBUFDT_SRCS +=
+LIBUFDT_SRCS += ufdt_overlay.c ufdt_convert.c ufdt_node.c ufdt_node_pool.c \
+	ufdt_prop_dict.c libufdt_sysdeps_posix.c
+libufdt_OBJS = $(LIBUFDT_SRCS:%.c=%.o)
+libufdt_LIB = libufdt.a

@@ -40,6 +40,7 @@ include $(srcdir)/kexec/libufdt/Makefile.libufdt
 libufdt_SRCS += $(LIBUFDT_SRCS:%=kexec/libufdt/%)
 
 arm_CPPFLAGS += -I$(srcdir)/kexec/libufdt
+arm_CPPFLAGS += -I$(srcdir)/kexec/libufdt/include
 
 arm_KEXEC_SRCS += $(libufdt_SRCS)
 
