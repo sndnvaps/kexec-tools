@@ -99,7 +99,7 @@ static inline long kexec_file_load(int kernel_fd, int initrd_fd,
 #define KEXEC_FILE_UNLOAD	0x00000001
 #define KEXEC_FILE_ON_CRASH	0x00000002
 #define KEXEC_FILE_NO_INITRAMFS	0x00000004
-#define KEXEC_HARDBOOT		0x00000005
+#define KEXEC_HARDBOOT		0x00000008
 
 /* These values match the ELF architecture values. 
  * Unless there is a good reason that should continue to be the case.
