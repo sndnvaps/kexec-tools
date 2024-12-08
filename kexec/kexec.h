@@ -243,6 +243,7 @@ extern int file_types;
 	{ "entry",		1, 0, OPT_ENTRY }, \
 	{ "type",		1, 0, OPT_TYPE }, \
 	{ "load-panic",         0, 0, OPT_PANIC }, \
+	{ "load-hardboot",		0, 0, OPT_LOAD_HARDBOOT}, \
 	{ "mem-min",		1, 0, OPT_MEM_MIN }, \
 	{ "mem-max",		1, 0, OPT_MEM_MAX }, \
 	{ "reuseinitrd",	0, 0, OPT_REUSE_INITRD }, \
@@ -250,7 +251,7 @@ extern int file_types;
 	{ "debug",		0, 0, OPT_DEBUG }, \
 	{ "status",		0, 0, OPT_STATUS }, \
 	{ "print-ckr-size",     0, 0, OPT_PRINT_CKR_SIZE }, \
-	{ "load-hardboot",		0, 0, OPT_LOAD_HARDBOOT}, \
+
 
 #define KEXEC_OPT_STR "h?vdfxyluet:psS"
 

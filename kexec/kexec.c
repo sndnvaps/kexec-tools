@@ -804,12 +804,15 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	if (kexec_debug)
 		print_segments(stderr, &info);
 
-	if (xen_present())
+	if (xen_present()) {
 		result = xen_kexec_load(&info);
-	else
+	} else {
+		dbgprintf("before kexec_load() func: line = %d\n",__LINE__);
 		result = kexec_load(info.entry,
 				    info.nr_segments, info.segment,
 				    info.kexec_flags);
+		dbgprintf("after kexec_load() func: line = %d\n",__LINE__);
+	}
 	if (result != 0) {
 		/* The load failed, print some debugging information */
 		fprintf(stderr, "kexec_load failed: %s\n", 

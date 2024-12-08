@@ -224,7 +224,8 @@ void fixup_elf_addrs(struct mem_ehdr *ehdr)
 	struct mem_phdr *phdr;
 	int i;
 
-	ehdr->e_entry += - arm64_mem.phys_offset + crash_reserved_mem.start;
+	
+	ehdr->e_entry += -arm64_mem.phys_offset + crash_reserved_mem.start;
 
 	for (i = 0; i < ehdr->e_phnum; i++) {
 		phdr = &ehdr->e_phdr[i];

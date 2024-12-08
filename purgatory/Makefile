@@ -44,13 +44,13 @@ purgatory/sha256.o: $(srcdir)/util_lib/sha256.c
 	mkdir -p $(@D)
 	$(COMPILE.c) -o $@ $^
 
+
 $(PURGATORY): CC=$(TARGET_CC)
 $(PURGATORY): CFLAGS+=$(PURGATORY_EXTRA_CFLAGS) \
 		      $($(ARCH)_PURGATORY_EXTRA_CFLAGS) \
 		      -Os -fno-builtin -ffreestanding \
 		      -fno-zero-initialized-in-bss \
 		      -fno-PIC -fno-PIE -fno-stack-protector
-
 $(PURGATORY): CPPFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS) \
 			-I$(srcdir)/purgatory/include \
 			-I$(srcdir)/purgatory/arch/$(ARCH)/include \

@@ -36,7 +36,7 @@ void* memcpy(void *dest, const void *src, size_t len)
 }
 
 
-int memcmp(void *src1, void *src2, size_t len)
+int memcmp(const void *src1, const void *src2, size_t len)
 {
 	unsigned char *s1, *s2;
 	size_t i;

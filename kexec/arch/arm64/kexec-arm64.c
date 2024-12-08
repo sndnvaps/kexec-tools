@@ -13,6 +13,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <linux/elf-em.h>
 #include <elf.h>
 
@@ -60,7 +61,7 @@ int file_types = sizeof(file_type) / sizeof(file_type[0]);
 /* arm64 global varables. */
 
 struct arm64_opts arm64_opts;
-struct arm64_mem arm64_mem = {
+struct arm64_mem_t arm64_mem = {
 	.phys_offset = arm64_mem_ngv,
 	.vp_offset = arm64_mem_ngv,
 };
@@ -143,6 +144,8 @@ int arch_process_options(int argc, char **argv)
 		case OPT_INITRD:
 			arm64_opts.initrd = optarg;
 			break;
+		case OPT_SERIAL:
+			arm64_opts.console = optarg;
 		default:
 			break; /* Ignore core and unknown options. */
 		}
@@ -158,9 +161,58 @@ int arch_process_options(int argc, char **argv)
 	if (arm64_opts.dtbo) {
 		dbgprintf("%s:%d: dtbo: %s\n", __func__, __LINE__, arm64_opts.dtbo);
 	}
+	dbgprintf("%s:%d: console: %s\n", __func__, __LINE__, arm64_opts.console);
 
 	return 0;
 }
+
+/**
+ * find_purgatory_sink - Find a sink for purgatory output.
+ */
+static uint64_t find_purgatory_sink(const char *console)
+{
+	int fd, ret;
+	char device[255], mem[255];
+	struct stat sb;
+	char buffer[10];
+	uint64_t iomem = 0x0;
+	if (!console)
+		return 0;
+	ret = snprintf(device, sizeof(device), "/sys/class/tty/%s", console);
+	if (ret < 0 || ret >= sizeof(device)) {
+		fprintf(stderr, "snprintf failed: %s\n", strerror(errno));
+		return 0;
+	}
+	if (stat(device, &sb) || !S_ISDIR(sb.st_mode)) {
+		fprintf(stderr, "kexec: %s: No valid console found for %s\n",
+			__func__, device);
+		return 0;
+	}
+	ret = snprintf(mem, sizeof(mem), "%s%s", device, "/iomem_base");
+	if (ret < 0 || ret >= sizeof(mem)) {
+		fprintf(stderr, "snprintf failed: %s\n", strerror(errno));
+		return 0;
+	}
+	printf("console memory read from %s\n", mem);
+	fd = open(mem, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "kexec: %s: No able to open %s\n",
+			__func__, mem);
+		return 0;
+	}
+	memset(buffer, '\0', sizeof(buffer));
+	ret = read(fd, buffer, sizeof(buffer));
+	if (ret < 0) {
+		fprintf(stderr, "kexec: %s: not able to read fd\n", __func__);
+		close(fd);
+		return 0;
+	}
+	sscanf(buffer, "%lx", &iomem);
+	printf("console memory is at %#lx\n", iomem);
+	close(fd);
+	return iomem;
+}
+
 
 /**
  * struct dtb - Info about a binary device tree.
@@ -605,15 +657,15 @@ int check_dtbo(void *dtboimg_buf, int *dtbo_entry_offset)
     return entry_count;
 
 }
-struct dtb load_dtb() {
+struct dtb load_dtb(void) {
 	struct dtb dtb_info;
 	//set dtb_info.buf default value to NULL
 	dtb_info.buf = NULL;
 
 	char *dtb_buf = NULL;
 	off_t dtb_size;
-	if (arm64_opts.dtbo) {
-		dbgprintf("load_dtboimg: in line %d",__LINE__);
+	if (arm64_opts.dtb) {
+		dbgprintf("load_dtb: in line %d",__LINE__);
 		dtb_buf = slurp_file(arm64_opts.dtb, &dtb_size);
 		if (dtb_buf == NULL) {
 			dbgprintf("load_dtb: failed in line: %d",__LINE__);
@@ -627,7 +679,7 @@ struct dtb load_dtb() {
     return dtb_info;
 }
 
-struct dtbo_img load_dtboimg()
+struct dtbo_img load_dtboimg(void)
 {
 	struct dtbo_img dtbo_info;
 	//set dtbo_info.buf default value to NULL
@@ -663,13 +715,13 @@ struct dtb arm64_load_dtbo(void) {
 	struct fdt_header *merged_fdt = NULL;
 	size_t main_fdt_size;
 
-	dbgprintf("arm64_load_dtb: in line %d",__LINE__);
+	//dbgprintf("arm64_load_dtb: in line %d",__LINE__);
 	dtb_info = load_dtb();
 	if (dtb_info.buf == NULL) {
 		dtbo_error("load_dtb fail\n");
 		return dtb_info;
     }
-	dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
+	//dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
 	dtbo_info = load_dtboimg();
     if (dtbo_info.buf == NULL) {
 		dtbo_error("load_dtbo fail\n");
@@ -680,7 +732,7 @@ struct dtb arm64_load_dtbo(void) {
     main_fdt_header = ufdt_install_blob((void *)dtb_info.buf, dtb_info.size);
 	main_fdt_size = dtb_info.size;
 
-	dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
+	//dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
 	memset((void *)dtbo_entry_offset, 0x0, sizeof(dtbo_entry_offset));
 	dt_entry_count = check_dtbo(dtbo_info.buf, dtbo_entry_offset);
 	dbgprintf("dt_entry_count= %d\n", dt_entry_count);
@@ -727,6 +779,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 	unsigned long hole_min;
 	unsigned long hole_max;
 	unsigned long initrd_end;
+	uint64_t purgatory_sink;
 	char *initrd_buf = NULL;
 	struct dtb dtb;
 	char command_line[COMMAND_LINE_SIZE] = "";
@@ -736,18 +789,23 @@ int arm64_load_other_segments(struct kexec_info *info,
 			sizeof(command_line));
 		command_line[sizeof(command_line) - 1] = 0;
 	}
-	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+
+	purgatory_sink = find_purgatory_sink(arm64_opts.console);
+	dbgprintf("%s:%d: purgatory sink: 0x%" PRIx64 "\n", __func__, __LINE__,
+		purgatory_sink);
+
+	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	if (arm64_opts.dtb) {
-	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 		dtb.name = "dtb_user";
 		dtb.buf = slurp_file(arm64_opts.dtb, &dtb.size);
 		if (arm64_opts.dtbo) {
-			dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+			//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 			dtb = arm64_load_dtbo();
-			dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+			//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 			dtb.name = "dtb_user";
 		}
-	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	} else {
 		result = read_1st_dtb(&dtb);
 
@@ -757,7 +815,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 			return EFAILED;
 		}
 	}
-	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	result = setup_2nd_dtb(&dtb, command_line,
 			info->kexec_flags & KEXEC_ON_CRASH);
 
@@ -771,7 +829,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 		hole_max = crash_reserved_mem.end;
 	else
 		hole_max = ULONG_MAX;
-	dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
+	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	if (arm64_opts.initrd) {
 		initrd_buf = slurp_file(arm64_opts.initrd, &initrd_size);
 
@@ -826,6 +884,9 @@ int arm64_load_other_segments(struct kexec_info *info,
 		hole_min, hole_max, 1, 0);
 
 	info->entry = (void *)elf_rel_get_addr(&info->rhdr, "purgatory_start");
+
+	elf_rel_set_symbol(&info->rhdr, "arm64_sink", &purgatory_sink,
+		sizeof(purgatory_sink));
 
 	elf_rel_set_symbol(&info->rhdr, "arm64_kernel_entry", &image_base,
 		sizeof(image_base));
@@ -951,6 +1012,12 @@ int machine_verify_elf_rel(struct mem_ehdr *ehdr)
 	return (ehdr->e_machine == EM_AARCH64);
 }
 
+static uint32_t get_bits(uint32_t value, int start, int end)
+{
+	uint32_t mask = ((uint32_t)1 << (end + 1 - start)) - 1;
+	return (value >> start) & mask;
+}
+
 void machine_apply_elf_rel(struct mem_ehdr *ehdr, struct mem_sym *UNUSED(sym),
 	unsigned long r_type, void *ptr, unsigned long address,
 	unsigned long value)
@@ -961,6 +1028,22 @@ void machine_apply_elf_rel(struct mem_ehdr *ehdr, struct mem_sym *UNUSED(sym),
 
 #if !defined(R_AARCH64_PREL32)
 # define R_AARCH64_PREL32 261
+#endif
+
+#if !defined(R_AARCH64_MOVW_UABS_G0_NC)
+#define R_AARCH64_MOVW_UABS_G0_NC  264
+#endif
+
+#if !defined(R_AARCH64_MOVW_UABS_G1_NC)
+#define R_AARCH64_MOVW_UABS_G1_NC  266
+#endif
+
+#if !defined(R_AARCH64_MOVW_UABS_G2_NC)
+#define R_AARCH64_MOVW_UABS_G2_NC  268
+#endif
+
+#if !defined(R_AARCH64_MOVW_UABS_G3)
+#define R_AARCH64_MOVW_UABS_G3  269
 #endif
 
 #if !defined(R_AARCH64_LD_PREL_LO19)
@@ -1002,13 +1085,41 @@ void machine_apply_elf_rel(struct mem_ehdr *ehdr, struct mem_sym *UNUSED(sym),
 	case R_AARCH64_ABS64:
 		type = "ABS64";
 		loc64 = ptr;
-		*loc64 = cpu_to_elf64(ehdr, elf64_to_cpu(ehdr, *loc64) + value);
+		*loc64 = cpu_to_elf64(ehdr,  value);
 		break;
 	case R_AARCH64_PREL32:
 		type = "PREL32";
 		loc32 = ptr;
-		*loc32 = cpu_to_elf32(ehdr,
-			elf32_to_cpu(ehdr, *loc32) + value - address);
+		*loc32 = cpu_to_elf32(ehdr, value - address);
+		break;
+
+	/* Set a MOV[KZ] immediate field to bits [15:0] of X. No overflow check */
+	case R_AARCH64_MOVW_UABS_G0_NC:
+		type = "MOVW_UABS_G0_NC";
+		loc32 = ptr;
+		imm = get_bits(value, 0, 15);
+		*loc32 = cpu_to_le32(le32_to_cpu(*loc32) + (imm << 5));
+		break;
+	/* Set a MOV[KZ] immediate field to bits [31:16] of X. No overflow check */
+	case R_AARCH64_MOVW_UABS_G1_NC:
+		type = "MOVW_UABS_G1_NC";
+		loc32 = ptr;
+		imm = get_bits(value, 16, 31);
+		*loc32 = cpu_to_le32(le32_to_cpu(*loc32) + (imm << 5));
+		break;
+	/* Set a MOV[KZ] immediate field to bits [47:32] of X. No overflow check */
+	case R_AARCH64_MOVW_UABS_G2_NC:
+		type = "MOVW_UABS_G2_NC";
+		loc32 = ptr;
+		imm = get_bits(value, 32, 47);
+		*loc32 = cpu_to_le32(le32_to_cpu(*loc32) + (imm << 5));
+		break;
+	/* Set a MOV[KZ] immediate field to bits [63:48] of X */
+	case R_AARCH64_MOVW_UABS_G3:
+		type = "MOVW_UABS_G3";
+		loc32 = ptr;
+		imm = get_bits(value, 48, 63);
+		*loc32 = cpu_to_le32(le32_to_cpu(*loc32) + (imm << 5));
 		break;
 	case R_AARCH64_LD_PREL_LO19:
 		type = "LD_PREL_LO19";

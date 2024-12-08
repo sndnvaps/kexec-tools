@@ -10,6 +10,11 @@ arm64_PURGATORY_EXTRA_CFLAGS = \
 	-Werror=implicit-int \
 	-Werror=strict-prototypes
 
+ifeq ($(TARGET_CC), clang)
+arm64_PURGATORY_EXTRA_CFLAGS += \
+	--target=$(target)
+endif
+
 arm64_PURGATORY_SRCS += \
 	purgatory/arch/arm64/entry.S \
 	purgatory/arch/arm64/purgatory-arm64.c
