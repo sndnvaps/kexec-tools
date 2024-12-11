@@ -40,8 +40,8 @@ int memcmp(const void *src1, const void *src2, size_t len)
 {
 	unsigned char *s1, *s2;
 	size_t i;
-	s1 = src1;
-	s2 = src2;
+	s1 = (unsigned char*)src1;
+	s2 = (unsigned char*)src2;
 	for(i = 0; i < len; i++) {
 		if (*s1 != *s2) {
 			return *s2 - *s1;

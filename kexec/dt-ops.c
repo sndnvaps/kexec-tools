@@ -143,3 +143,34 @@ int dtb_delete_property(char *dtb, const char *node, const char *prop)
 
 	return result;
 }
+
+int dtb_add_extra_regs(char **dtb, off_t *dtb_size) {
+	FILE *f;
+	uint32_t reg;
+	int off;
+
+	//delete fdt_node /memory/reg
+	dtb_delete_property(*dtb,"/memory", "reg");
+
+	off = fdt_path_offset(*dtb, "/memory");
+    if (off < 0)
+    {
+        fprintf(stderr, "DTB: Could not find memory node.\n");
+        return -1;
+    }
+
+    f = fopen("/proc/device-tree/memory/reg", "r");
+    if(!f)
+    {
+        fprintf(stderr, "DTB: Failed to open /proc/device-tree/memory/reg!\n");
+        return -1;
+    }
+
+	while (fread(&reg, sizeof(reg),1,f) == 1) {
+		dtb_set_property(dtb, dtb_size, "/memory", "reg", &reg, sizeof(reg));
+	}
+
+	fclose(f);
+
+	return 0;
+}

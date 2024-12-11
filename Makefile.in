@@ -55,6 +55,7 @@ PURGATORY_EXTRA_CFLAGS = @PURGATORY_EXTRA_CFLAGS@
 ASFLAGS		= @ASFLAGS@ $($(ARCH)_ASFLAGS)
 LDFLAGS		= @LDFLAGS@ -static
 LIBS		= @LIBS@
+STRIPFLAGS		= @STRIPFLAGS@ --strip-all
 
 # Utilities called by the makefiles
 INSTALL		= @INSTALL@

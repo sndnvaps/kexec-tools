@@ -60,7 +60,7 @@ int image_arm64_load(int argc, char **argv, const char *kernel_buf,
 	dbgprintf("%s: PE format:      %s\n", __func__,
 		(arm64_header_check_pe_sig(header) ? "yes" : "no"));
 
-	dbgprintf("%s: %d",__func__,__LINE__);
+	//dbgprintf("%s: %d",__func__,__LINE__);
 	/* create and initialize elf core header segment */
 	if (info->kexec_flags & KEXEC_ON_CRASH) {
 		result = load_crashdump_segments(info);
@@ -70,12 +70,12 @@ int image_arm64_load(int argc, char **argv, const char *kernel_buf,
 			goto exit;
 		}
 	}
-	dbgprintf("%s: %d",__func__,__LINE__);
+	//dbgprintf("%s: %d",__func__,__LINE__);
 	/* load the kernel */
 	add_segment_phys_virt(info, kernel_buf, kernel_size,
 			kernel_segment + arm64_mem.text_offset,
 			arm64_mem.image_size, 0);
-	dbgprintf("%s: %d",__func__,__LINE__);
+	//dbgprintf("%s: %d",__func__,__LINE__);
 	/* load additional data */
 	result = arm64_load_other_segments(info, kernel_segment
 		+ arm64_mem.text_offset);

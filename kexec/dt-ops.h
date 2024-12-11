@@ -10,4 +10,6 @@ int dtb_set_property(char **dtb, off_t *dtb_size, const char *node,
 
 int dtb_delete_property(char *dtb, const char *node, const char *prop);
 
+int dtb_add_extra_regs(char **dtb, off_t *dtb_size);
+
 #endif

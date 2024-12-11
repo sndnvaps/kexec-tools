@@ -702,18 +702,21 @@ struct dtbo_img load_dtboimg(void)
     return dtbo_info;
 }
 
-
-struct dtb arm64_load_dtbo(void) {
+struct dtb merge_dto_to_main_dtb(void)
+{
 	struct dtb dtb_info = {};
 	struct dtbo_img dtbo_info = {};
+	void *fdto, *merged_fdt;
+	void *fdt_dtb;
 	void *dtboimg_buf = NULL;
-	int i = 0;
-	int dt_entry_count;
-	int offset;
-	int dtbo_entry_offset[DTBO_COUNT] = {0};
-	struct fdt_header *main_fdt_header = NULL;
-	struct fdt_header *merged_fdt = NULL;
-	size_t main_fdt_size;
+	struct dt_table_header *dtbo_table;
+	struct dt_table_entry *dt_entry;
+	uint32_t i;
+	int ret;
+	//set board_id = 0;
+	//set board_rev = 0;
+	uint32_t board_id = 0;
+	uint32_t board_rev = 0;
 
 	//dbgprintf("arm64_load_dtb: in line %d",__LINE__);
 	dtb_info = load_dtb();
@@ -721,50 +724,80 @@ struct dtb arm64_load_dtbo(void) {
 		dtbo_error("load_dtb fail\n");
 		return dtb_info;
     }
+	fdt_dtb = (void *)malloc(dtb_info.size);
+	fdt_dtb = dtb_info.buf;
+
 	//dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
 	dtbo_info = load_dtboimg();
     if (dtbo_info.buf == NULL) {
 		dtbo_error("load_dtbo fail\n");
 		return dtb_info;
     }
+	dtboimg_buf = (void *)malloc(dtbo_info.size);
 	dtboimg_buf = dtbo_info.buf;
+	dtbo_table = (struct dt_table_header *)dtboimg_buf;
 
-    main_fdt_header = ufdt_install_blob((void *)dtb_info.buf, dtb_info.size);
-	main_fdt_size = dtb_info.size;
 
-	//dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
-	memset((void *)dtbo_entry_offset, 0x0, sizeof(dtbo_entry_offset));
-	dt_entry_count = check_dtbo(dtbo_info.buf, dtbo_entry_offset);
-	dbgprintf("dt_entry_count= %d\n", dt_entry_count);
-	if (dt_entry_count < 0) {
-		dtbo_error("don't have match dtbo\n");
-		free(dtboimg_buf);
+
+	ret = fdt_check_header(fdt_dtb);
+	if (ret < 0) {
+		printf("DTBO: fdt_check_header(): %s\n", fdt_strerror(ret));
 		return dtb_info;
 	}
-	while (dtbo_idx[i] != 0xf5f5f5f5) {
-		if (dtbo_idx[i] > dt_entry_count) {
-			dtbo_error("androidboot.dtbo_idx is %d > dtboimg %d\n", dtbo_idx[i], dt_entry_count);
-			return dtb_info;
-		}
-		offset = dtbo_entry_offset[dtbo_idx[i]];
-		dbgprintf("offset= 0x%x\n", offset);
-		dbgprintf("dtbo_idx_%d overlay_size=0x%x\n", dtbo_idx[i], fdt_totalsize(dtboimg_buf + offset));
-		merged_fdt = ufdt_apply_overlay(main_fdt_header, main_fdt_size,
-                                  dtboimg_buf + offset, fdt_totalsize(dtboimg_buf + offset));
-		if (merged_fdt == NULL) {
-			dtbo_error(" merge fdt fail\n");
-			return dtb_info;
-		}
-		//merged_fdt_size = dtc_totalsize(merged_fdt);
 
-		dbgprintf("dtbo_idx_%d merge sucess, size=0x%x \n", dtbo_idx[i], fdt_totalsize(merged_fdt));
-		i++;
-
+	if (fdt32_to_cpu(dtbo_table->magic) != DT_TABLE_MAGIC) {
+		printf("DTBO: dtbo.img: %s\n", fdt_strerror(-FDT_ERR_BADMAGIC));
+		return dtb_info;
 	}
-	dtb_info.buf = (char *)merged_fdt;
-	dtb_info.size = fdt_totalsize(merged_fdt);
+	dt_entry = (struct dt_table_entry *)((unsigned long)dtbo_table
+			+ fdt32_to_cpu(dtbo_table->header_size));
+
+	for (i = 0; i < fdt32_to_cpu(dtbo_table->dt_entry_count); i++, dt_entry++) {
+		uint32_t id = fdt32_to_cpu(dt_entry->id);
+		uint32_t rev = fdt32_to_cpu(dt_entry->rev);
+
+		if ((id == board_id) && (rev == board_rev)) {
+			printf("DTBO: id: 0x%x, rev: 0x%x\n", id, rev);
+			break;
+		}
+	}
+
+	if (i == fdt32_to_cpu(dtbo_table->dt_entry_count)) {
+		printf("DTBO: Not found dtbo of board_rev 0x%x.\n", board_rev);
+		return dtb_info;
+	}
+
+	fdto = malloc(fdt32_to_cpu(dt_entry->dt_size));
+	memcpy((void *)fdto, (void *)((unsigned long)dtbo_table + fdt32_to_cpu(dt_entry->dt_offset)),
+			fdt32_to_cpu(dt_entry->dt_size));
+
+	ret = fdt_check_header(fdto);
+	if (ret < 0) {
+		printf("DTBO: overlay dtbo: %s", fdt_strerror(ret));
+		goto fdto_magic_err;
+	}
+
+	merged_fdt = ufdt_apply_overlay(fdt_dtb, fdt_totalsize(fdt_dtb),
+			fdto, fdt_totalsize(fdto));
+	if (!merged_fdt)
+		goto fdto_magic_err;
+
+	fdt_dtb = malloc(fdt_totalsize(merged_fdt));
+	memcpy(fdt_dtb, merged_fdt, fdt_totalsize(merged_fdt));
+	printf("DTBO: Merge Complete (size:%d)!\n", fdt_totalsize(fdt_dtb));
+
+	free(merged_fdt);
+	dtb_info.buf = (char *)malloc(fdt_totalsize(fdt_dtb));
+	dtb_info.buf = (char *)fdt_dtb;
+	dtb_info.size = fdt_totalsize(fdt_dtb);
+
+
+fdto_magic_err:
+	free(fdto);
+
 	return dtb_info;
 }
+
 
 
 /**
@@ -791,7 +824,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 	}
 
 	purgatory_sink = find_purgatory_sink(arm64_opts.console);
-	dbgprintf("%s:%d: purgatory sink: 0x%" PRIx64 "\n", __func__, __LINE__,
+	dbgprintf("%s:%d: purgatory sink: %#lx\n", __func__, __LINE__,
 		purgatory_sink);
 
 	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
@@ -801,7 +834,8 @@ int arm64_load_other_segments(struct kexec_info *info,
 		dtb.buf = slurp_file(arm64_opts.dtb, &dtb.size);
 		if (arm64_opts.dtbo) {
 			//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
-			dtb = arm64_load_dtbo();
+			//dtb = arm64_load_dtbo();
+			dtb = merge_dto_to_main_dtb();
 			//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 			dtb.name = "dtb_user";
 		}
@@ -837,7 +871,6 @@ int arm64_load_other_segments(struct kexec_info *info,
 			fprintf(stderr, "kexec: Empty ramdisk file.\n");
 		else {
 			/* Put the initrd after the kernel. */
-
 			initrd_base = add_buffer_phys_virt(info, initrd_buf,
 				initrd_size, initrd_size, 0,
 				hole_min, hole_max, 1, 0);
@@ -872,9 +905,9 @@ int arm64_load_other_segments(struct kexec_info *info,
 		fprintf(stderr, "kexec: Error: dtb too big.\n");
 		return EFAILED;
 	}
-
 	dtb_base = add_buffer_phys_virt(info, dtb.buf, dtb.size, dtb.size,
 		0, hole_min, hole_max, 1, 0);
+
 	/* dtb_base is valid if we got here. */
 
 	dbgprintf("dtb:    base %lx, size %lxh (%ld)\n", dtb_base, dtb.size,
@@ -893,6 +926,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 
 	elf_rel_set_symbol(&info->rhdr, "arm64_dtb_addr", &dtb_base,
 		sizeof(dtb_base));
+
 	return 0;
 }
 

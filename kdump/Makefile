@@ -19,6 +19,7 @@ $(KDUMP): CC=$(TARGET_CC)
 $(KDUMP): $(KDUMP_OBJS)
 	@$(MKDIR) -p $(@D)
 	$(LINK.o) -o $@ $^ $(CFLAGS) $(LIBS)
+	$(STRIP) $(STRIPFLAGS) $@
 
 $(KDUMP_MANPAGE): kdump/kdump.8
 	$(MKDIR) -p     $(MANDIR)/man8

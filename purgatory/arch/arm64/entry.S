@@ -17,12 +17,12 @@ purgatory_start:
 	bl	purgatory
 
 	/* Start new image. */
-	ldr	x17, arm64_kernel_entry
+	ldr	x4, arm64_kernel_entry
 	ldr	x0, arm64_dtb_addr
 	mov	x1, xzr
 	mov	x2, xzr
 	mov	x3, xzr
-	br	x17
+	br	x4
 
 size purgatory_start
 
