@@ -1099,6 +1099,10 @@ void machine_apply_elf_rel(struct mem_ehdr *ehdr, struct mem_sym *UNUSED(sym),
 # define R_AARCH64_LDST64_ABS_LO12_NC 286
 #endif
 
+#if !defined(R_AARCH64_LDST128_ABS_LO12_NC)
+# define R_AARCH64_LDST128_ABS_LO12_NC 299
+#endif
+
 	uint64_t *loc64;
 	uint32_t *loc32;
 	uint64_t *location = (uint64_t *)ptr;
@@ -1194,6 +1198,15 @@ void machine_apply_elf_rel(struct mem_ehdr *ehdr, struct mem_sym *UNUSED(sym),
 		loc32 = ptr;
 		*loc32 = cpu_to_le32(le32_to_cpu(*loc32)
 			+ ((value & 0xff8) << (10 - 3)));
+		break;
+	case R_AARCH64_LDST128_ABS_LO12_NC:
+		if (value & 0xf)
+			die("%s: ERROR Unaligned value: %lx\n", __func__,
+				value);
+		type = "LDST128_ABS_LO12_NC";
+		loc32 = ptr;
+		*loc32 = cpu_to_le32(le32_to_cpu(*loc32)
+			+ ((value & 0xff0) << (10 - 4)));
 		break;
 	default:
 		die("%s: ERROR Unknown type: %lu\n", __func__, r_type);
