@@ -116,6 +116,10 @@ fail:
 	return buf;
 }
 #else
+int is_zlib_file(const char *UNUSED(filename), off_t *UNUSED(r_size))
+{
+	return 0;
+}
 char *zlib_decompress_file(const char *UNUSED(filename), off_t *UNUSED(r_size))
 {
 	return NULL;

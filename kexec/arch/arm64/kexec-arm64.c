@@ -688,7 +688,7 @@ struct dtbo_img load_dtboimg(void)
 	char *dtboimg_buf = NULL;
 	off_t dtboimg_size;
 	if (arm64_opts.dtbo) {
-		dbgprintf("load_dtboimg: in line %d",__LINE__);
+		dbgprintf("load_dtboimg: in line %d\n",__LINE__);
 		dtboimg_buf = slurp_file(arm64_opts.dtbo, &dtboimg_size);
 		if (dtboimg_buf == NULL) {
 			dbgprintf("load_dtboimg: failed in line: %d",__LINE__);
@@ -724,7 +724,6 @@ struct dtb merge_dto_to_main_dtb(void)
 		dtbo_error("load_dtb fail\n");
 		return dtb_info;
     }
-	fdt_dtb = (void *)malloc(dtb_info.size);
 	fdt_dtb = dtb_info.buf;
 
 	//dbgprintf("arm64_load_dtbo: in line %d",__LINE__);
@@ -733,7 +732,6 @@ struct dtb merge_dto_to_main_dtb(void)
 		dtbo_error("load_dtbo fail\n");
 		return dtb_info;
     }
-	dtboimg_buf = (void *)malloc(dtbo_info.size);
 	dtboimg_buf = dtbo_info.buf;
 	dtbo_table = (struct dt_table_header *)dtboimg_buf;
 
@@ -746,6 +744,7 @@ struct dtb merge_dto_to_main_dtb(void)
 	}
 
 	if (fdt32_to_cpu(dtbo_table->magic) != DT_TABLE_MAGIC) {
+		printf("DTBO: dtbo.img: dtbo_table->magic = %#x\n",dtbo_table->magic);
 		printf("DTBO: dtbo.img: %s\n", fdt_strerror(-FDT_ERR_BADMAGIC));
 		return dtb_info;
 	}
@@ -782,14 +781,10 @@ struct dtb merge_dto_to_main_dtb(void)
 	if (!merged_fdt)
 		goto fdto_magic_err;
 
-	fdt_dtb = malloc(fdt_totalsize(merged_fdt));
-	memcpy(fdt_dtb, merged_fdt, fdt_totalsize(merged_fdt));
-	printf("DTBO: Merge Complete (size:%d)!\n", fdt_totalsize(fdt_dtb));
-
-	free(merged_fdt);
-	dtb_info.buf = (char *)malloc(fdt_totalsize(fdt_dtb));
-	dtb_info.buf = (char *)fdt_dtb;
-	dtb_info.size = fdt_totalsize(fdt_dtb);
+	printf("DTBO: Merge Complete (size:%d)!\n", fdt_totalsize(merged_fdt));
+	free(dtb_info.buf);
+	dtb_info.buf = (char *)merged_fdt;
+	dtb_info.size = fdt_totalsize(merged_fdt);
 
 
 fdto_magic_err:
@@ -829,17 +824,13 @@ int arm64_load_other_segments(struct kexec_info *info,
 
 	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	if (arm64_opts.dtb) {
-	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
-		dtb.name = "dtb_user";
-		dtb.buf = slurp_file(arm64_opts.dtb, &dtb.size);
 		if (arm64_opts.dtbo) {
-			//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
-			//dtb = arm64_load_dtbo();
 			dtb = merge_dto_to_main_dtb();
-			//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 			dtb.name = "dtb_user";
+		} else {
+			dtb.name = "dtb_user";
+			dtb.buf = slurp_file(arm64_opts.dtb, &dtb.size);
 		}
-	//dbgprintf("arm64_load_other_segments: in line %d",__LINE__);
 	} else {
 		result = read_1st_dtb(&dtb);
 

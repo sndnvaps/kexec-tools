@@ -374,7 +374,7 @@ static void scan_notes(int fd, loff_t start, loff_t lsize)
 	size_t size;
 	ssize_t ret;
 
-	if (lsize > SSIZE_MAX) {
+	if (lsize > SIZE_MAX) {
 		fprintf(stderr, "Unable to handle note section of %llu bytes\n",
 			(unsigned long long)lsize);
 		exit(20);
